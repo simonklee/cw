@@ -3,17 +3,17 @@ package main
 import (
     "flag"
     "fmt"
-    "net/http"
+    "io/ioutil"
     "log"
+    "net/http"
     "net/url"
     "os"
     "strings"
-    "io/ioutil"
 )
 
 type fetchState struct {
-    id  string
-    state bool 
+    id    string
+    state bool
 }
 
 var (
@@ -64,8 +64,8 @@ func storageListener(status chan<- fetchState, in <-chan []byte) {
     for {
         data := <-in
         storageWriter(data)
-        fs:= fetchState{"", true}
-        status <-fs
+        fs := fetchState{"", true}
+        status <- fs
     }
 }
 
@@ -78,31 +78,35 @@ func getUrl(status chan<- fetchState, result chan<- []byte, u *url.URL) {
         urlstr = urlstr[:sep]
     }
 
-    res, err := http.Get(urlstr); if err != nil {
+    res, err := http.Get(urlstr)
+
+    if err != nil {
         fs.state = false
         status <- fs
-        return 
+        return
     }
 
     debugResponse(res)
 
-    data, err := ioutil.ReadAll(res.Body); if err != nil {
+    data, err := ioutil.ReadAll(res.Body)
+
+    if err != nil {
         fs.state = false
         status <- fs
         return
     }
 
     res.Body.Close() /* close fd */
-    result <-data
-    status <-fs
+    result <- data
+    status <- fs
 }
 
 func getAndListenUrls(urls []*url.URL) {
-    netlen   := len(urls)
-    fslen    := netlen
+    netlen := len(urls)
+    fslen := netlen
     netState := make(chan fetchState)
-    fsState  := make(chan fetchState)
-    results  := make(chan []byte, 100)
+    fsState := make(chan fetchState)
+    results := make(chan []byte, 100)
 
     go storageListener(fsState, results)
 
@@ -130,7 +134,7 @@ func main() {
     flag.Usage = usage
     flag.Parse()
     args := flag.Args()
-    
+
     urls := make([]*url.URL, 0, len(args))
 
     for i := range args {
