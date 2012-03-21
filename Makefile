@@ -1,4 +1,4 @@
-cw: cw.go
+cw: cw.go main.go debug.go store.go
 	go build .
 
 test: clean cw

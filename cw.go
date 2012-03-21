@@ -1,47 +1,15 @@
 package main
 
 import (
-    "flag"
     "fmt"
     "io/ioutil"
-    "log"
     "net/http"
     "os"
     "strings"
 )
 
-var (
-    logger = log.New(os.Stdout, "", 0)
-    store *Store
-)
-
 type monitor struct {
     in, out chan string
-}
-
-func usage() {
-    fmt.Fprintf(os.Stdout, "usage: cw url [url ...]\n")
-    flag.PrintDefaults()
-    os.Exit(0)
-}
-
-func main() {
-    flag.Usage = usage
-    flag.Parse()
-    args := flag.Args()
-
-    if len(args) == 0 {
-        usage()
-    } else {
-        m := newMonitor()
-        store = newStore()
-
-        for _, u := range args {
-            m.in <- u
-        }
-
-        m.listen()
-    }
 }
 
 func newMonitor() *monitor {
@@ -49,6 +17,8 @@ func newMonitor() *monitor {
         in:   make(chan string, 100),
         out:  make(chan string),
     }
+
+    go m.listen()
 
     return m
 }
