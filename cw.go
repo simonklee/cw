@@ -10,6 +10,7 @@ import (
     "net/url"
     "os"
     "strings"
+    "errors"
     "sync"
 )
 
@@ -74,6 +75,21 @@ func (s *Store) listen() {
             s.set(&e)
         }
     }
+}
+
+func (s *Store) get(id string) ([]byte, error) {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+
+    if e, ok := s.entries[id]; ok {
+        return e, nil
+    }
+
+    return nil, errors.New("url not found")
+}
+
+func (s *Store) getByUrl(id, url string) ([]byte, error) {
+    return s.get(s.key(url))
 }
 
 func (s *Store) set(e *entry) {
