@@ -7,7 +7,6 @@ import (
     "fmt"
     "path/filepath"
     "os"
-    "bufio"
 )
 
 const (
@@ -99,11 +98,9 @@ func (s *Store) fsSet(id string) error {
         return err
     }
 
-    b := bufio.NewWriter(f)
     defer f.Close()
-    defer b.Flush()
 
-    if n, err := b.Write(data); err != nil || n != len(data) {
+    if n, err := f.Write(data); err != nil || n != len(data) {
         return err
     }
 
