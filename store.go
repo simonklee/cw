@@ -3,10 +3,10 @@ package main
 import (
     "crypto/md5"
     "errors"
-    "sync"
     "fmt"
-    "path/filepath"
     "os"
+    "path/filepath"
+    "sync"
 )
 
 const (
