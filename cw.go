@@ -1,6 +1,7 @@
 package main
 
 import (
+    "encoding/base64"
     "flag"
     "fmt"
     "io/ioutil"
@@ -8,30 +9,28 @@ import (
     "net/http"
     "net/url"
     "os"
-    "sync"
     "strings"
-    "encoding/base64"
+    "sync"
 )
 
 var (
     logger = log.New(os.Stdout, "", 0)
-    store *Store
 )
 
 type Store struct {
     mu      sync.RWMutex
-    entries map[string] []byte
-    save chan entry
+    entries map[string][]byte
+    save    chan entry
 }
 
 type entry struct {
     id, url string
-    data  []byte
+    data    []byte
 }
 
-type state struct {
-    id string
-    ok bool
+type backend struct {
+    save    chan<- entry
+    in, out chan string
 }
 
 func usage() {
@@ -48,16 +47,22 @@ func main() {
     if len(args) == 0 {
         usage()
     } else {
-        store = newStore()
-        fetchUrls(args)
+        b := newBackend()
 
-        <-store.save 
-        println("main got e")
+        for _, u := range args {
+            b.in <- u
+        }
+
+        b.listen()
     }
 }
 
 func newStore() *Store {
-    s := &Store{entries: make(map[string][]byte), save: make(chan entry, 100)}
+    s := &Store{
+        entries: make(map[string][]byte),
+        save:    make(chan entry, 100),
+    }
+
     go s.listen()
     return s
 }
@@ -66,7 +71,6 @@ func (s *Store) listen() {
     for {
         select {
         case e := <-s.save:
-            println("save got e")
             s.set(&e)
         }
     }
@@ -74,25 +78,54 @@ func (s *Store) listen() {
 
 func (s *Store) set(e *entry) {
     s.mu.Lock()
+
+    if e.id == "" {
+        e.id = s.key(e.url)
+    }
+
     defer s.mu.Unlock()
     s.entries[e.id] = e.data
 }
 
 func (s *Store) put(u string, data []byte) {
     e := entry{
-        id: s.key(u),
-        url: u, 
+        id:   s.key(u),
+        url:  u,
         data: data,
     }
 
-    s.save<- e
+    s.save <- e
 }
 
 func (s *Store) key(u string) string {
     return base64.URLEncoding.EncodeToString([]byte(u))
 }
 
-func fetch(u string) {
+func newBackend() *backend {
+    s := newStore()
+
+    b := &backend{
+        save: s.save,
+        in:   make(chan string, 100),
+        out:  make(chan string),
+    }
+
+    return b
+}
+
+func (b *backend) listen() {
+    for {
+        select {
+        case u := <-b.in:
+            println("--> in ", u)
+            go fetch(u, b.save)
+        case u := <-b.out:
+            println("<-- out ", u)
+        }
+    }
+}
+
+func fetch(u string, save chan<- entry) {
     i := strings.Index(u, "?")
 
     if i > 0 {
@@ -116,23 +149,7 @@ func fetch(u string) {
         return
     }
 
-    store.put(u, data)
-}
-
-func fetchUrls(urls []string) {
-    for _, u := range urls {
-        go fetch(u)
-    }
-}
-
-func debugFetchState(fs *state) {
-    logger.Printf("id: %s", fs.id)
-
-    if fs.ok {
-        logger.Printf("state: OK\n")
-    } else {
-        logger.Printf("state: ERR\n")
-    }
+    save <- entry{url: u, data: data}
 }
 
 func debugUrl(u *url.URL) {
@@ -154,4 +171,3 @@ func debugResponse(r *http.Response) {
         logger.Println("\t", k, ":", v)
     }
 }
-
