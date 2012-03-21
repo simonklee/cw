@@ -10,7 +10,7 @@ import (
 
 var (
     logger = log.New(os.Stdout, "", 0)
-    store *Store
+    store  *Store
 )
 
 func usage() {
@@ -34,8 +34,6 @@ func main() {
             m.in <- u
         }
 
-        for {
-            time.Sleep(1e9)
-        }
+        time.Sleep(1e9)
     }
 }

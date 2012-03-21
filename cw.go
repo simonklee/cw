@@ -14,8 +14,8 @@ type monitor struct {
 
 func newMonitor() *monitor {
     m := &monitor{
-        in:   make(chan string, 100),
-        out:  make(chan string),
+        in:  make(chan string, 100),
+        out: make(chan string),
     }
 
     go m.listen()

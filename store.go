@@ -1,9 +1,17 @@
 package main
 
 import (
-    "encoding/base64"
+    "crypto/md5"
     "errors"
     "sync"
+    "fmt"
+    "path/filepath"
+    "os"
+    "bufio"
+)
+
+const (
+    basepath = "/home/simon/src/github.com/simonz05/cw/store/"
 )
 
 type Store struct {
@@ -28,12 +36,9 @@ func newStore() *Store {
 }
 
 func (s *Store) listen() {
-    for {
-        select {
-        case e := <-s.save:
-            s.set(&e)
-
-        }
+    for e := range s.save {
+        s.set(&e)
+        s.fsSet(e.id)
     }
 }
 
@@ -48,8 +53,18 @@ func (s *Store) get(id string) ([]byte, error) {
     return nil, errors.New("not found")
 }
 
-func (s *Store) getByUrl(id, url string) ([]byte, error) {
-    return s.get(s.key(url))
+func (s *Store) getByUrl(u string) ([]byte, error) {
+    return s.get(s.key(u))
+}
+
+func (s *Store) put(u string, data []byte) {
+    e := entry{
+        id:   s.key(u),
+        url:  u,
+        data: data,
+    }
+
+    s.save <- e
 }
 
 func (s *Store) set(e *entry) {
@@ -63,16 +78,45 @@ func (s *Store) set(e *entry) {
     s.entries[e.id] = e.data
 }
 
-func (s *Store) put(u string, data []byte) {
-    e := entry{
-        id:   s.key(u),
-        url:  u,
-        data: data,
+func (s *Store) fsSet(id string) error {
+    data, err := s.get(id)
+
+    if err != nil {
+        return err
     }
 
-    s.save <- e
+    p := s.path(id)
+
+    if err := os.MkdirAll(filepath.Dir(p), 0754); err != nil {
+        logger.Println("mkdir:", err)
+        return err
+    }
+
+    f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+
+    if err != nil {
+        logger.Println("open:", err)
+        return err
+    }
+
+    b := bufio.NewWriter(f)
+    defer f.Close()
+    defer b.Flush()
+
+    if n, err := b.Write(data); err != nil || n != len(data) {
+        return err
+    }
+
+    return nil
+}
+
+func (s *Store) path(id string) string {
+    p := id[:2] + "/" + id[2:4] + "/" + id
+    return basepath + p
 }
 
 func (s *Store) key(u string) string {
-    return base64.URLEncoding.EncodeToString([]byte(u))
+    h := md5.New()
+    h.Write([]byte(u))
+    return fmt.Sprintf("%x", h.Sum(nil))
 }
