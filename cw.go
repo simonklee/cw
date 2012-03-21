@@ -8,92 +8,127 @@ import (
     "net/http"
     "net/url"
     "os"
+    "sync"
     "strings"
+    "encoding/base64"
 )
-
-type fetchState struct {
-    id    string
-    state bool
-}
-
-type urlResult struct {
-    id   string
-    data []byte
-    url  *url.URL
-}
 
 var (
     logger = log.New(os.Stdout, "", 0)
+    store *Store
 )
 
-func (u *urlResult) storageWriter(status chan<- fetchState) {
-    //logger.Printf("%s\n", u.data)
-    status <- fetchState{"", true}
+type Store struct {
+    mu      sync.RWMutex
+    entries map[string] []byte
+    save chan entry
 }
 
-func (u *urlResult) getUrl(status, result chan<- fetchState) {
-    urlstr := u.url.String()
-    sep := strings.Index(urlstr, "?")
-    fs := fetchState{urlstr, true}
+type entry struct {
+    id, url string
+    data  []byte
+}
 
-    if sep > 0 {
-        urlstr = urlstr[:sep]
+type state struct {
+    id string
+    ok bool
+}
+
+func usage() {
+    fmt.Fprintf(os.Stdout, "usage: cw url [url ...]\n")
+    flag.PrintDefaults()
+    os.Exit(0)
+}
+
+func main() {
+    flag.Usage = usage
+    flag.Parse()
+    args := flag.Args()
+
+    if len(args) == 0 {
+        usage()
+    } else {
+        store = newStore()
+        fetchUrls(args)
+
+        <-store.save 
+        println("main got e")
+    }
+}
+
+func newStore() *Store {
+    s := &Store{entries: make(map[string][]byte), save: make(chan entry, 100)}
+    go s.listen()
+    return s
+}
+
+func (s *Store) listen() {
+    for {
+        select {
+        case e := <-s.save:
+            println("save got e")
+            s.set(&e)
+        }
+    }
+}
+
+func (s *Store) set(e *entry) {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    s.entries[e.id] = e.data
+}
+
+func (s *Store) put(u string, data []byte) {
+    e := entry{
+        id: s.key(u),
+        url: u, 
+        data: data,
     }
 
-    res, err := http.Get(urlstr)
+    s.save<- e
+}
+
+func (s *Store) key(u string) string {
+    return base64.URLEncoding.EncodeToString([]byte(u))
+}
+
+func fetch(u string) {
+    i := strings.Index(u, "?")
+
+    if i > 0 {
+        u = u[:i]
+    }
+
+    res, err := http.Get(u)
 
     if err != nil {
-        fs.state = false
-        status <- fs
+        fmt.Fprintln(os.Stderr, err)
         return
     }
 
     debugResponse(res)
 
-    u.data, err = ioutil.ReadAll(res.Body)
+    data, err := ioutil.ReadAll(res.Body)
+    defer res.Body.Close()
 
     if err != nil {
-        fs.state = false
-        status <- fs
+        fmt.Fprintln(os.Stderr, err)
         return
     }
 
-    res.Body.Close() /* close fd */
-    go u.storageWriter(result)
-    status <- fs
+    store.put(u, data)
 }
 
-func getAndListenUrls(urls []*url.URL) {
-    netlen := len(urls)
-    fslen := netlen
-    netState := make(chan fetchState)
-    fsState := make(chan fetchState)
-
+func fetchUrls(urls []string) {
     for _, u := range urls {
-        ur := &urlResult{url: u}
-        go ur.getUrl(netState, fsState)
-    }
-
-    for {
-        select {
-        case fs := <-netState:
-            debugFetchState(&fs)
-            netlen--
-        case fs := <-fsState:
-            debugFetchState(&fs)
-            fslen--
-        }
-
-        if netlen == 0 && fslen == 0 {
-            break
-        }
+        go fetch(u)
     }
 }
 
-func debugFetchState(fs *fetchState) {
+func debugFetchState(fs *state) {
     logger.Printf("id: %s", fs.id)
 
-    if fs.state {
+    if fs.ok {
         logger.Printf("state: OK\n")
     } else {
         logger.Printf("state: ERR\n")
@@ -120,33 +155,3 @@ func debugResponse(r *http.Response) {
     }
 }
 
-func usage() {
-    fmt.Fprintf(os.Stdout, "usage: cw url [url ...]\n")
-    flag.PrintDefaults()
-    os.Exit(0)
-}
-
-func main() {
-    flag.Usage = usage
-    flag.Parse()
-    args := flag.Args()
-
-    urls := make([]*url.URL, 0, len(args))
-
-    for i := range args {
-        u, err := url.Parse(args[i])
-
-        if err != nil {
-            fmt.Fprintln(os.Stderr, err)
-            continue
-        }
-
-        urls = append(urls, u)
-    }
-
-    getAndListenUrls(urls)
-
-    if len(args) == 0 {
-        usage()
-    }
-}
