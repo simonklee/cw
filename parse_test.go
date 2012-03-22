@@ -45,7 +45,7 @@ var multistring = `<!doctype html>
 </ul> 
 </div>
 </nav>`
-                                                                                                                                                    
+
 func TestParserOnePass(t *testing.T) {
     for _, test := range parseTests {
         p := initParse(test.in)
@@ -71,23 +71,23 @@ func TestParseMultiPass(t *testing.T) {
 }
 
 func BenchmarkParseOnePass(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+    for i := 0; i < b.N; i++ {
         p := initParse(multistring)
         _, err := p.next()
 
         for err == nil {
             _, err = p.next()
         }
-	}
+    }
 }
 
 func BenchmarkParseMultiPass(b *testing.B) {
     p := initParse(multistring)
 
-	for i := 0; i < b.N; i++ {
+    for i := 0; i < b.N; i++ {
         p = initParse(multistring)
         p.all()
-	}
+    }
 }
 
 func BenchmarkParseMultiPassLong(b *testing.B) {
@@ -99,8 +99,8 @@ func BenchmarkParseMultiPassLong(b *testing.B) {
 
     p := initParse(s)
 
-	for i := 0; i < b.N; i++ {
+    for i := 0; i < b.N; i++ {
         p.pos = 0
         p.all()
-	}
+    }
 }

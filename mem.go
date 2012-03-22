@@ -1,8 +1,8 @@
 package main
 
 import (
-    "runtime"
     "fmt"
+    "runtime"
 )
 
 func memstat() {

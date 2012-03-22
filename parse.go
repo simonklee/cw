@@ -1,23 +1,23 @@
 package main
 
 import (
-    "unicode"
     "io"
     "strings"
+    "unicode"
 )
 
 type parse struct {
-    s string
+    s   string
     sep string
     pos int
     end int
-    n int
+    n   int
 }
 
 func initParse(s string) *parse {
     return &parse{
-        s: s, 
-        pos: 0, 
+        s:   s,
+        pos: 0,
         end: len(s),
     }
 }
@@ -27,7 +27,7 @@ func (p *parse) next() (string, error) {
 
 Loop:
 
-    for ; i + 4 <= p.end; i++ {
+    for ; i+4 <= p.end; i++ {
         // find href
         if p.s[i] == 'h' && p.s[i:i+4] == "href" {
             i += 4
@@ -64,7 +64,7 @@ Loop:
     return "", io.EOF
 }
 
-func (p *parse) all() ([]string) {
+func (p *parse) all() []string {
     var buf []string
 
     for s, err := p.next(); err == nil; {

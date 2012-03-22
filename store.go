@@ -1,9 +1,7 @@
 package main
 
 import (
-    "crypto/md5"
     "errors"
-    "fmt"
     "os"
     "path/filepath"
     "sync"
@@ -16,18 +14,20 @@ const (
 type Store struct {
     mu      sync.RWMutex
     entries map[string][]byte
-    save    chan entry
+    save    chan Entry
+    update  chan State
 }
 
-type entry struct {
-    id, url string
-    data    []byte
+type Entry struct {
+    id   string
+    data []byte
 }
 
-func newStore() *Store {
+func newStore(update chan State) *Store {
     s := &Store{
         entries: make(map[string][]byte),
-        save:    make(chan entry, 100),
+        save:    make(chan Entry, 100),
+        update:  update,
     }
 
     go s.listen()
@@ -38,47 +38,18 @@ func (s *Store) listen() {
     for e := range s.save {
         s.set(&e)
         s.fsSet(e.id)
+        s.update <- State{e.id, StateIdle}
     }
 }
 
-func (s *Store) get(id string) ([]byte, error) {
+func (s *Store) set(e *Entry) {
     s.mu.Lock()
-    defer s.mu.Unlock()
-
-    if e, ok := s.entries[id]; ok {
-        return e, nil
-    }
-
-    return nil, errors.New("not found")
-}
-
-func (s *Store) getByUrl(u string) ([]byte, error) {
-    return s.get(s.key(u))
-}
-
-func (s *Store) put(u string, data []byte) {
-    e := entry{
-        id:   s.key(u),
-        url:  u,
-        data: data,
-    }
-
-    s.save <- e
-}
-
-func (s *Store) set(e *entry) {
-    s.mu.Lock()
-
-    if e.id == "" {
-        e.id = s.key(e.url)
-    }
-
     defer s.mu.Unlock()
     s.entries[e.id] = e.data
 }
 
 func (s *Store) fsSet(id string) error {
-    data, err := s.get(id)
+    data, err := s.Get(id)
 
     if err != nil {
         return err
@@ -112,8 +83,23 @@ func (s *Store) path(id string) string {
     return basepath + p
 }
 
-func (s *Store) key(u string) string {
-    h := md5.New()
-    h.Write([]byte(u))
-    return fmt.Sprintf("%x", h.Sum(nil))
+func (s *Store) Get(id string) ([]byte, error) {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+
+    if e, ok := s.entries[id]; ok {
+        return e, nil
+    }
+
+    return nil, errors.New("not found")
+}
+
+func (s *Store) Put(id string, data []byte) {
+    s.update <- State{id, StateStore}
+    e := Entry{
+        id:   id,
+        data: data,
+    }
+
+    s.save <- e
 }

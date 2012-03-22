@@ -1,6 +1,7 @@
 package main
 
 import (
+    "crypto/md5"
     "fmt"
     "io/ioutil"
     "net/http"
@@ -8,34 +9,41 @@ import (
     "strings"
 )
 
-type monitor struct {
-    in, out chan string
+type context struct {
+    in      chan string
+    store   *Store
+    monitor *Monitor
 }
 
-func newMonitor() *monitor {
-    m := &monitor{
-        in:  make(chan string, 100),
-        out: make(chan string),
+func newContext() *context {
+    monitor := newMonitor()
+    c := &context{
+        in:      make(chan string),
+        store:   newStore(monitor.update),
+        monitor: monitor,
     }
 
-    go m.listen()
-
-    return m
+    go c.listen()
+    return c
 }
 
-func (m *monitor) listen() {
+func (c *context) Add(u string) {
+    c.in <- u
+}
+
+func (c *context) listen() {
     for {
         select {
-        case u := <-m.in:
-            println("--> in ", u)
-            go fetch(u)
-        case u := <-m.out:
-            println("<-- out ", u)
+        case u := <-c.in:
+            id := c.key(u)
+            c.monitor.update <- State{id, StateIdle}
+            go c.fetch(u, id)
         }
     }
 }
 
-func fetch(u string) {
+func (c *context) fetch(u, id string) {
+    c.monitor.update <- State{id, StateFetch}
     i := strings.Index(u, "?")
 
     if i > 0 {
@@ -49,7 +57,7 @@ func fetch(u string) {
         return
     }
 
-    debugResponse(res)
+    //debugResponse(res)
 
     data, err := ioutil.ReadAll(res.Body)
     defer res.Body.Close()
@@ -59,5 +67,11 @@ func fetch(u string) {
         return
     }
 
-    store.save <- entry{url: u, data: data}
+    c.store.Put(id, data)
+}
+
+func (c *context) key(u string) string {
+    h := md5.New()
+    h.Write([]byte(u))
+    return fmt.Sprintf("%x", h.Sum(nil))
 }

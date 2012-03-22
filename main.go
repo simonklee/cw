@@ -27,11 +27,10 @@ func main() {
     if len(args) == 0 {
         usage()
     } else {
-        m := newMonitor()
-        store = newStore()
+        c := newContext()
 
         for _, u := range args {
-            m.in <- u
+            c.Add(u)
         }
 
         time.Sleep(1e9)
