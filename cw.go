@@ -18,32 +18,22 @@ type context struct {
 func newContext() *context {
     monitor := newMonitor()
     c := &context{
-        in:      make(chan string),
         store:   newStore(monitor.update),
         monitor: monitor,
     }
 
-    go c.listen()
     return c
 }
 
 func (c *context) Add(u string) {
-    c.in <- u
-}
+    id := c.key(u)
 
-func (c *context) listen() {
-    for {
-        select {
-        case u := <-c.in:
-            id := c.key(u)
-            c.monitor.update <- State{id, StateIdle}
-            go c.fetch(u, id)
-        }
+    if c.monitor.SetIf(id, StateIdle, StateFetch) {
+        go c.fetch(id, u)
     }
 }
 
-func (c *context) fetch(u, id string) {
-    c.monitor.update <- State{id, StateFetch}
+func (c *context) fetch(id, u string) {
     i := strings.Index(u, "?")
 
     if i > 0 {

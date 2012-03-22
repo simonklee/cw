@@ -1,6 +1,8 @@
 package main
 
-import ()
+import (
+    "sync"
+)
 
 const (
     StateNone uint8 = 1 << iota
@@ -15,6 +17,7 @@ type State struct {
 }
 
 type Monitor struct {
+    mu    sync.RWMutex
     update chan State
     states map[string]uint8
 }
@@ -33,20 +36,44 @@ func (m *Monitor) listen() {
     for {
         select {
         case state := <-m.update:
-            m.setState(&state)
+            m.Set(state.id, state.state)
         }
     }
 }
 
-func (m *Monitor) setState(state *State) {
-    m.states[state.id] = state.state
-    m.printState(state.id)
+func (m *Monitor) SetIf(id string, ifstate, state uint8) bool {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+
+    if oldstate, ok := m.states[id]; !ok || oldstate == ifstate {
+        m.states[id] = state
+        return true
+    }
+
+    return false
 }
 
-func (m *Monitor) printState(id string) {
-    s := m.states[id]
+func (m *Monitor) Set(id string, state uint8) {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    m.states[id] = state
+    m.printState(id, state)
+}
 
-    switch s {
+func (m *Monitor) Get(id string) uint8 {
+    m.mu.RLock()
+    defer m.mu.RUnlock()
+
+    if state, ok := m.states[id]; ok {
+        return state
+    }
+
+    return StateNone
+}
+
+
+func (m *Monitor) printState(id string, state uint8) {
+    switch state {
     case StateIdle:
         println(id, "is_idle")
     case StateFetch:
