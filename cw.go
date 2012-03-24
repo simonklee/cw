@@ -9,17 +9,21 @@ import (
     "strings"
 )
 
+type key string
+
 type context struct {
     in      chan string
     store   Store
     monitor *Monitor
+    index   *LinkIndex
 }
 
 type request struct {
-    id      string
+    id      key
     url     string
     store   Store
     monitor *Monitor
+    index   chan key
 }
 
 func newContext() *context {
@@ -28,24 +32,18 @@ func newContext() *context {
         store:   NewMemoryStore(monitor.update),
         monitor: monitor,
     }
-
+    c.index = NewLinkIndex(c.monitor.update, c.store)
     return c
 }
 
 func (c *context) Add(u string) {
     u = c.normUrl(u)
-    id := c.id(u)
+    id := NewKey(u)
 
     if c.monitor.SetIf(id, StateIdle, StateFetch) {
         r := c.newRequest(id, u)
         go r.fetch()
     }
-}
-
-func (c *context) id(u string) string {
-    h := md5.New()
-    h.Write([]byte(u))
-    return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 func (c *context) normUrl(u string) string {
@@ -58,12 +56,13 @@ func (c *context) normUrl(u string) string {
     return u[:i]
 }
 
-func (c *context) newRequest(url, id string) *request {
+func (c *context) newRequest(id key, url string) *request {
     r := new(request)
     r.url = url
     r.id = id
     r.store = c.store
     r.monitor = c.monitor
+    r.index = c.index.index
     return r
 }
 
@@ -84,9 +83,23 @@ func (r *request) fetch() {
 
     defer res.Body.Close()
 
-    r.store.Set(&Entry{r.id, data})
+    if r.store.Set(&Entry{r.id, data}) != nil {
+        goto Error
+    }
+
+    r.index <- r.id
     return
 Error:
     r.monitor.update <- update{r.id, StateError}
     fmt.Fprintln(os.Stderr, err)
+}
+
+func NewKey(url string) key {
+    h := md5.New()
+    h.Write([]byte(url))
+    return key(fmt.Sprintf("%x", h.Sum(nil)))
+}
+
+func (k key) String() string {
+    return string(k)
 }

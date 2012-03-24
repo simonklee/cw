@@ -20,7 +20,7 @@ func TestSetIf(t *testing.T) {
     m := newMonitor()
 
     for _, test := range monitorUrls {
-        if ok := m.SetIf(test.url, StateFetch, StateIdle); ok != test.ok {
+        if ok := m.SetIf(NewKey(test.url), StateFetch, StateIdle); ok != test.ok {
             error_(t, test.ok, ok, nil)
         } else {
             t.Log(test.url, test.ok, ok)

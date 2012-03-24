@@ -12,12 +12,12 @@ const (
 )
 
 type Store interface {
-    Get(id string) ([]byte, error)
+    Get(id key) ([]byte, error)
     Set(e *Entry) error
 }
 
 type Entry struct {
-    Id   string
+    Id   key
     Data []byte
 }
 
@@ -26,12 +26,12 @@ type MemoryStore struct {
 
     // entries lock
     mu      sync.RWMutex
-    entries map[string][]byte
+    entries map[key][]byte
 }
 
 func NewMemoryStore(monitor chan update) *MemoryStore {
     s := &MemoryStore{
-        entries: make(map[string][]byte),
+        entries: make(map[key][]byte),
         monitor: monitor,
     }
 
@@ -46,7 +46,7 @@ func (s *MemoryStore) Set(e *Entry) error {
     return nil
 }
 
-func (s *MemoryStore) Get(id string) ([]byte, error) {
+func (s *MemoryStore) Get(id key) ([]byte, error) {
     s.mu.Lock()
     defer s.mu.Unlock()
 
@@ -88,11 +88,11 @@ func (s *FilesystemStore) Set(e *Entry) error {
     return nil
 }
 
-func (s *FilesystemStore) path(id string) string {
+func (s *FilesystemStore) path(id key) string {
     p := id[:2] + "/" + id[2:4] + "/" + id
-    return basepath + p
+    return string(basepath + p)
 }
 
-func (s *FilesystemStore) Get(id string) ([]byte, error) {
+func (s *FilesystemStore) Get(id key) ([]byte, error) {
     return nil, nil
 }

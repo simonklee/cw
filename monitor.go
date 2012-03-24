@@ -8,7 +8,7 @@ import (
 type flags uint32
 
 const (
-    StateNone  flags = iota
+    StateNone flags = iota
     StateIdle
     StateFetch
     StateStore
@@ -17,13 +17,13 @@ const (
 )
 
 type state struct {
-    id     string
+    id     key
     status flags
     last   int64
 }
 
 type update struct {
-    id     string
+    id     key
     status flags
 }
 
@@ -31,13 +31,13 @@ type Monitor struct {
     update chan update
 
     mu     sync.RWMutex
-    states map[string]state
+    states map[key]state
 }
 
 func newMonitor() *Monitor {
     m := &Monitor{
         update: make(chan update, 100),
-        states: make(map[string]state),
+        states: make(map[key]state),
     }
 
     go m.listen()
@@ -52,7 +52,7 @@ func (m *Monitor) listen() {
     }
 }
 
-func (m *Monitor) set(id string, status flags) {
+func (m *Monitor) set(id key, status flags) {
     s, ok := m.states[id]
 
     if !ok {
@@ -66,7 +66,7 @@ func (m *Monitor) set(id string, status flags) {
     m.printState(s.id, s.status)
 }
 
-func (m *Monitor) SetIf(id string, ifstatus, status flags) bool {
+func (m *Monitor) SetIf(id key, ifstatus, status flags) bool {
     m.mu.Lock()
     defer m.mu.Unlock()
 
@@ -78,7 +78,7 @@ func (m *Monitor) SetIf(id string, ifstatus, status flags) bool {
     return false
 }
 
-func (m *Monitor) SetIfTime(id string, ifstatus, status flags, d int64) bool {
+func (m *Monitor) SetIfTime(id key, ifstatus, status flags, d int64) bool {
     m.mu.Lock()
     defer m.mu.Unlock()
     s, ok := m.states[id]
@@ -91,7 +91,7 @@ func (m *Monitor) SetIfTime(id string, ifstatus, status flags, d int64) bool {
     return false
 }
 
-func (m *Monitor) Get(id string) flags {
+func (m *Monitor) Get(id key) flags {
     m.mu.RLock()
     defer m.mu.RUnlock()
 
@@ -102,7 +102,7 @@ func (m *Monitor) Get(id string) flags {
     return StateNone
 }
 
-func (m *Monitor) printState(id string, status flags) {
+func (m *Monitor) printState(id key, status flags) {
     switch status {
     case StateIdle:
         println(id, "is_idle")

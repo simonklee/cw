@@ -2,15 +2,15 @@ package main
 
 type LinkIndex struct {
     monitor chan update
-    index chan string
-    store Store
+    index   chan key
+    store   Store
 }
 
-func newLinkIndex(monitor chan update, store Store) *LinkIndex {
+func NewLinkIndex(monitor chan update, store Store) *LinkIndex {
     l := &LinkIndex{
         monitor: monitor,
-        index: make(chan string),
-        store: store,
+        index:   make(chan key),
+        store:   store,
     }
 
     go l.listen()
@@ -25,7 +25,7 @@ func (l *LinkIndex) listen() {
         if err != nil {
             l.monitor <- update{id, StateError}
         }
-        
+
         p := initParse(string(data))
         p.next()
     }
