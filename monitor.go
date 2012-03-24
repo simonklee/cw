@@ -12,6 +12,7 @@ const (
     StateIdle
     StateFetch
     StateStore
+    StateIndex
     StateError
 )
 
