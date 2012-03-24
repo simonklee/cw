@@ -2,6 +2,7 @@ package main
 
 import (
     "sync"
+    "time"
 )
 
 const (
@@ -9,23 +10,31 @@ const (
     StateIdle
     StateFetch
     StateStore
+    StateError
 )
 
-type State struct {
-    id    string
-    state uint8
+type state struct {
+    id     string
+    status uint8
+    last   int64
+}
+
+type update struct {
+    id     string
+    status uint8
 }
 
 type Monitor struct {
+    update chan update
+
     mu     sync.RWMutex
-    update chan State
-    states map[string]uint8
+    states map[string]state
 }
 
 func newMonitor() *Monitor {
     m := &Monitor{
-        update: make(chan State, 100),
-        states: make(map[string]uint8),
+        update: make(chan update, 100),
+        states: make(map[string]state),
     }
 
     go m.listen()
@@ -33,52 +42,74 @@ func newMonitor() *Monitor {
 }
 
 func (m *Monitor) listen() {
-    for {
-        select {
-        case state := <-m.update:
-            m.Set(state.id, state.state)
-        }
+    for u := range m.update {
+        m.mu.Lock()
+        m.set(u.id, u.status)
+        m.mu.Unlock()
     }
 }
 
-func (m *Monitor) SetIf(id string, ifstate, state uint8) bool {
+func (m *Monitor) set(id string, status uint8) {
+    s, ok := m.states[id]
+
+    if !ok {
+        s = state{}
+        m.states[id] = s
+    }
+
+    s.last = time.Now().Unix()
+    s.status = status
+    m.states[s.id] = s
+    m.printState(s.id, s.status)
+}
+
+func (m *Monitor) SetIf(id string, ifstatus, status uint8) bool {
     m.mu.Lock()
     defer m.mu.Unlock()
 
-    if oldstate, ok := m.states[id]; !ok || oldstate == ifstate {
-        m.printState(id, state)
-        m.states[id] = state
+    if s, ok := m.states[id]; !ok || s.status == ifstatus {
+        m.set(id, status)
         return true
     }
 
     return false
 }
 
-func (m *Monitor) Set(id string, state uint8) {
+func (m *Monitor) SetIfTime(id string, ifstatus, status uint8, d int64) bool {
     m.mu.Lock()
     defer m.mu.Unlock()
-    m.states[id] = state
-    m.printState(id, state)
+    s, ok := m.states[id]
+
+    if !ok || (s.status == ifstatus && time.Now().Unix()-s.last > d) {
+        m.set(id, status)
+        return true
+    }
+
+    return false
 }
 
 func (m *Monitor) Get(id string) uint8 {
     m.mu.RLock()
     defer m.mu.RUnlock()
 
-    if state, ok := m.states[id]; ok {
-        return state
+    if s, ok := m.states[id]; ok {
+        return s.status
     }
 
     return StateNone
 }
 
-func (m *Monitor) printState(id string, state uint8) {
-    switch state {
+func (m *Monitor) printState(id string, status uint8) {
+    switch status {
     case StateIdle:
         println(id, "is_idle")
     case StateFetch:
         println(id, "is_fetch")
     case StateStore:
         println(id, "is_store")
+    case StateError:
+        println(id, "is_error")
+    case StateNone:
+        println(id, "is_none")
     }
 }

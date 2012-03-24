@@ -15,6 +15,13 @@ type context struct {
     monitor *Monitor
 }
 
+type request struct {
+    id      string
+    url     string
+    store   *Store
+    monitor *Monitor
+}
+
 func newContext() *context {
     monitor := newMonitor()
     c := &context{
@@ -26,42 +33,60 @@ func newContext() *context {
 }
 
 func (c *context) Add(u string) {
-    id := c.key(u)
+    u = c.normUrl(u)
+    id := c.id(u)
 
     if c.monitor.SetIf(id, StateIdle, StateFetch) {
-        go c.fetch(id, u)
+        r := c.newRequest(id, u)
+        go r.fetch()
     }
 }
 
-func (c *context) fetch(id, u string) {
-    i := strings.Index(u, "?")
-
-    if i > 0 {
-        u = u[:i]
-    }
-
-    res, err := http.Get(u)
-
-    if err != nil {
-        fmt.Fprintln(os.Stderr, err)
-        return
-    }
-
-    //debugResponse(res)
-
-    data, err := ioutil.ReadAll(res.Body)
-    defer res.Body.Close()
-
-    if err != nil {
-        fmt.Fprintln(os.Stderr, err)
-        return
-    }
-
-    c.store.Put(id, data)
-}
-
-func (c *context) key(u string) string {
+func (c *context) id(u string) string {
     h := md5.New()
     h.Write([]byte(u))
     return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func (c *context) normUrl(u string) string {
+    i := strings.Index(u, "?")
+
+    if i == -1 {
+        i = len(u)
+    }
+
+    return u[:i]
+}
+
+func (c *context) newRequest(url, id string) *request {
+    r := new(request)
+    r.url = url
+    r.id = id
+    r.store = c.store
+    r.monitor = c.monitor
+    return r
+}
+
+func (r *request) fetch() {
+    var data []byte
+    res, err := http.Get(r.url)
+
+    if err != nil {
+        goto Error
+    }
+
+    //debugResponse(res)
+    data, err = ioutil.ReadAll(res.Body)
+
+    if err != nil {
+        goto Error
+    }
+
+    defer res.Body.Close()
+
+    r.store.Save <- entry{r.id, data}
+    return
+Error:
+    r.monitor.update <- update{r.id, StateError}
+    fmt.Fprintln(os.Stderr, err)
 }

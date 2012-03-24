@@ -12,22 +12,24 @@ const (
 )
 
 type Store struct {
+    Save    chan entry
+    monitor chan update
+
+    // entries lock
     mu      sync.RWMutex
     entries map[string][]byte
-    save    chan Entry
-    update  chan State
 }
 
-type Entry struct {
+type entry struct {
     id   string
     data []byte
 }
 
-func newStore(update chan State) *Store {
+func newStore(monitor chan update) *Store {
     s := &Store{
         entries: make(map[string][]byte),
-        save:    make(chan Entry, 100),
-        update:  update,
+        monitor: monitor,
+        Save:    make(chan entry, 100),
     }
 
     go s.listen()
@@ -35,14 +37,15 @@ func newStore(update chan State) *Store {
 }
 
 func (s *Store) listen() {
-    for e := range s.save {
+    for e := range s.Save {
+        s.monitor <- update{e.id, StateStore}
         s.set(&e)
         s.fsSet(e.id)
-        s.update <- State{e.id, StateIdle}
+        s.monitor <- update{e.id, StateIdle}
     }
 }
 
-func (s *Store) set(e *Entry) {
+func (s *Store) set(e *entry) {
     s.mu.Lock()
     defer s.mu.Unlock()
     s.entries[e.id] = e.data
@@ -92,14 +95,4 @@ func (s *Store) Get(id string) ([]byte, error) {
     }
 
     return nil, errors.New("not found")
-}
-
-func (s *Store) Put(id string, data []byte) {
-    s.update <- State{id, StateStore}
-    e := Entry{
-        id:   id,
-        data: data,
-    }
-
-    s.save <- e
 }
