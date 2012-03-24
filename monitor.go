@@ -17,7 +17,7 @@ type State struct {
 }
 
 type Monitor struct {
-    mu    sync.RWMutex
+    mu     sync.RWMutex
     update chan State
     states map[string]uint8
 }
@@ -46,6 +46,7 @@ func (m *Monitor) SetIf(id string, ifstate, state uint8) bool {
     defer m.mu.Unlock()
 
     if oldstate, ok := m.states[id]; !ok || oldstate == ifstate {
+        m.printState(id, state)
         m.states[id] = state
         return true
     }
@@ -70,7 +71,6 @@ func (m *Monitor) Get(id string) uint8 {
 
     return StateNone
 }
-
 
 func (m *Monitor) printState(id string, state uint8) {
     switch state {
