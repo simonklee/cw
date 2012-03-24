@@ -11,8 +11,17 @@ const (
     basepath = "/home/simon/src/github.com/simonz05/cw/store/"
 )
 
-type Store struct {
-    Save    chan entry
+type Store interface {
+    Get(id string) ([]byte, error)
+    Set(e *Entry) error
+}
+
+type Entry struct {
+    Id   string
+    Data []byte
+}
+
+type MemoryStore struct {
     monitor chan update
 
     // entries lock
@@ -20,47 +29,43 @@ type Store struct {
     entries map[string][]byte
 }
 
-type entry struct {
-    id   string
-    data []byte
-}
-
-func newStore(monitor chan update) *Store {
-    s := &Store{
+func NewMemoryStore(monitor chan update) *MemoryStore {
+    s := &MemoryStore{
         entries: make(map[string][]byte),
         monitor: monitor,
-        Save:    make(chan entry, 100),
     }
 
-    go s.listen()
     return s
 }
 
-func (s *Store) listen() {
-    for e := range s.Save {
-        s.monitor <- update{e.id, StateStore}
-        s.set(&e)
-        s.fsSet(e.id)
-        s.monitor <- update{e.id, StateIdle}
-    }
-}
-
-func (s *Store) set(e *entry) {
+func (s *MemoryStore) Set(e *Entry) error {
     s.mu.Lock()
     defer s.mu.Unlock()
-    s.entries[e.id] = e.data
+    s.monitor <- update{e.Id, StateStore}
+    s.entries[e.Id] = e.Data
+    return nil
 }
 
-func (s *Store) fsSet(id string) error {
-    data, err := s.Get(id)
+func (s *MemoryStore) Get(id string) ([]byte, error) {
+    s.mu.Lock()
+    defer s.mu.Unlock()
 
-    if err != nil {
-        return err
+    if e, ok := s.entries[id]; ok {
+        return e, nil
     }
 
-    p := s.path(id)
+    return nil, errors.New("not found")
+}
 
-    if err := os.MkdirAll(filepath.Dir(p), 0754); err != nil {
+type FilesystemStore struct {
+    monitor chan update
+}
+
+func (s *FilesystemStore) Set(e *Entry) error {
+    p := s.path(e.Id)
+    err := os.MkdirAll(filepath.Dir(p), 0754)
+
+    if err != nil {
         logger.Println("mkdir:", err)
         return err
     }
@@ -73,26 +78,21 @@ func (s *Store) fsSet(id string) error {
     }
 
     defer f.Close()
+    n, err := f.Write(e.Data)
 
-    if n, err := f.Write(data); err != nil || n != len(data) {
+    if err != nil || n != len(e.Data) {
+        logger.Println("write:", err)
         return err
     }
 
     return nil
 }
 
-func (s *Store) path(id string) string {
+func (s *FilesystemStore) path(id string) string {
     p := id[:2] + "/" + id[2:4] + "/" + id
     return basepath + p
 }
 
-func (s *Store) Get(id string) ([]byte, error) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-
-    if e, ok := s.entries[id]; ok {
-        return e, nil
-    }
-
-    return nil, errors.New("not found")
+func (s *FilesystemStore) Get(id string) ([]byte, error) {
+    return nil, nil
 }

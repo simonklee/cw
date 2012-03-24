@@ -11,21 +11,21 @@ import (
 
 type context struct {
     in      chan string
-    store   *Store
+    store   Store
     monitor *Monitor
 }
 
 type request struct {
     id      string
     url     string
-    store   *Store
+    store   Store
     monitor *Monitor
 }
 
 func newContext() *context {
     monitor := newMonitor()
     c := &context{
-        store:   newStore(monitor.update),
+        store:   NewMemoryStore(monitor.update),
         monitor: monitor,
     }
 
@@ -84,7 +84,7 @@ func (r *request) fetch() {
 
     defer res.Body.Close()
 
-    r.store.Save <- entry{r.id, data}
+    r.store.Set(&Entry{r.id, data})
     return
 Error:
     r.monitor.update <- update{r.id, StateError}

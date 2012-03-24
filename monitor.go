@@ -5,8 +5,10 @@ import (
     "time"
 )
 
+type flags uint32
+
 const (
-    StateNone uint8 = 1 << iota
+    StateNone  flags = iota
     StateIdle
     StateFetch
     StateStore
@@ -15,13 +17,13 @@ const (
 
 type state struct {
     id     string
-    status uint8
+    status flags
     last   int64
 }
 
 type update struct {
     id     string
-    status uint8
+    status flags
 }
 
 type Monitor struct {
@@ -49,7 +51,7 @@ func (m *Monitor) listen() {
     }
 }
 
-func (m *Monitor) set(id string, status uint8) {
+func (m *Monitor) set(id string, status flags) {
     s, ok := m.states[id]
 
     if !ok {
@@ -63,7 +65,7 @@ func (m *Monitor) set(id string, status uint8) {
     m.printState(s.id, s.status)
 }
 
-func (m *Monitor) SetIf(id string, ifstatus, status uint8) bool {
+func (m *Monitor) SetIf(id string, ifstatus, status flags) bool {
     m.mu.Lock()
     defer m.mu.Unlock()
 
@@ -75,7 +77,7 @@ func (m *Monitor) SetIf(id string, ifstatus, status uint8) bool {
     return false
 }
 
-func (m *Monitor) SetIfTime(id string, ifstatus, status uint8, d int64) bool {
+func (m *Monitor) SetIfTime(id string, ifstatus, status flags, d int64) bool {
     m.mu.Lock()
     defer m.mu.Unlock()
     s, ok := m.states[id]
@@ -88,7 +90,7 @@ func (m *Monitor) SetIfTime(id string, ifstatus, status uint8, d int64) bool {
     return false
 }
 
-func (m *Monitor) Get(id string) uint8 {
+func (m *Monitor) Get(id string) flags {
     m.mu.RLock()
     defer m.mu.RUnlock()
 
@@ -99,7 +101,7 @@ func (m *Monitor) Get(id string) uint8 {
     return StateNone
 }
 
-func (m *Monitor) printState(id string, status uint8) {
+func (m *Monitor) printState(id string, status flags) {
     switch status {
     case StateIdle:
         println(id, "is_idle")
