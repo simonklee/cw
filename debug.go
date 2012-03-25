@@ -28,6 +28,23 @@ func debugResponse(r *http.Response) {
     }
 }
 
+func debugState(id key, status flags) {
+    switch status {
+    case StateIdle:
+        logger.Println(id, "is_idle")
+    case StateFetch:
+        logger.Println(id, "is_fetch")
+    case StateStore:
+        logger.Println(id, "is_store")
+    case StateError:
+        logger.Println(id, "is_error")
+    case StateIndex:
+        logger.Println(id, "is_index")
+    case StateNone:
+        logger.Println(id, "is_none")
+    }
+}
+
 func memstat() {
     s := new(runtime.MemStats)
     runtime.ReadMemStats(s)

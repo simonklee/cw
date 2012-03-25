@@ -63,7 +63,7 @@ func (m *Monitor) set(id key, status flags) {
     s.last = time.Now().Unix()
     s.status = status
     m.states[s.id] = s
-    m.printState(s.id, s.status)
+    debugState(s.id, s.status)
 }
 
 func (m *Monitor) SetIf(id key, ifstatus, status flags) bool {
@@ -100,21 +100,4 @@ func (m *Monitor) Get(id key) flags {
     }
 
     return StateNone
-}
-
-func (m *Monitor) printState(id key, status flags) {
-    switch status {
-    case StateIdle:
-        println(id, "is_idle")
-    case StateFetch:
-        println(id, "is_fetch")
-    case StateStore:
-        println(id, "is_store")
-    case StateError:
-        println(id, "is_error")
-    case StateIndex:
-        println(id, "is_index")
-    case StateNone:
-        println(id, "is_none")
-    }
 }
