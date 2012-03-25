@@ -112,6 +112,8 @@ func (m *Monitor) printState(id key, status flags) {
         println(id, "is_store")
     case StateError:
         println(id, "is_error")
+    case StateIndex:
+        println(id, "is_index")
     case StateNone:
         println(id, "is_none")
     }

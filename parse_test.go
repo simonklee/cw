@@ -2,6 +2,8 @@ package main
 
 import (
     "testing"
+    "os"
+    "io/ioutil"
 )
 
 func error_(t *testing.T, expected, got interface{}, err error) {
@@ -48,14 +50,16 @@ var multistring = `<!doctype html>
 
 func TestParserOnePass(t *testing.T) {
     for _, test := range parseTests {
-        p := initParse(test.in)
+        b, i := linkParse([]byte(test.in), 0);
 
-        if s, err := p.next(); s != test.out {
-            error_(t, test.out, s, err)
+        if string(b) != test.out {
+            error_(t, test.out, b, nil)
         }
 
-        if s, err := p.next(); err == nil {
-            error_(t, s, nil, err)
+        b, i = linkParse([]byte(test.in), i);
+
+        if i != -1 {
+            error_(t, b, i, nil)
         }
 
         t.Log(test.in, test.out)
@@ -63,30 +67,45 @@ func TestParserOnePass(t *testing.T) {
 }
 
 func TestParseMultiPass(t *testing.T) {
-    p := initParse(multistring)
-
-    if o := p.all(); len(o) != 6 {
+    if o := linkParseAll([]byte(multistring)); len(o) != 6 {
         error_(t, 6, len(o), nil)
     }
 }
 
-func BenchmarkParseOnePass(b *testing.B) {
-    for i := 0; i < b.N; i++ {
-        p := initParse(multistring)
-        _, err := p.next()
+func TestParseMultiPassLong(t *testing.T) {
+    f, err := os.OpenFile("test.html", os.O_RDONLY, 0644)
 
-        for err == nil {
-            _, err = p.next()
+    if err != nil {
+        error_(t, nil, nil, err)
+    }
+
+    data, err = ioutil.ReadAll(f)
+    f.Close()
+
+    _, j := linkParse(data, 0)
+
+    for j != -1 {
+        _, j = linkParse(data, j)
+    }
+}
+
+func BenchmarkParseOnePass(b *testing.B) {
+    data := []byte(multistring)
+
+    for i := 0; i < b.N; i++ {
+        _, j := linkParse(data, 0)
+
+        for j != -1 {
+            _, j = linkParse(data, j)
         }
     }
 }
 
 func BenchmarkParseMultiPass(b *testing.B) {
-    p := initParse(multistring)
+    data := []byte(multistring)
 
     for i := 0; i < b.N; i++ {
-        p = initParse(multistring)
-        p.all()
+        linkParseAll(data)
     }
 }
 
@@ -97,10 +116,9 @@ func BenchmarkParseMultiPassLong(b *testing.B) {
         s += multistring
     }
 
-    p := initParse(s)
+    data := []byte(s)
 
     for i := 0; i < b.N; i++ {
-        p.pos = 0
-        p.all()
+        linkParseAll(data)
     }
 }

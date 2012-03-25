@@ -16,6 +16,7 @@ type context struct {
     store   Store
     monitor *Monitor
     index   *LinkIndex
+    client  *http.Client
 }
 
 type request struct {
@@ -24,6 +25,7 @@ type request struct {
     store   Store
     monitor *Monitor
     index   chan key
+    client  *http.Client
 }
 
 func newContext() *context {
@@ -31,6 +33,7 @@ func newContext() *context {
     c := &context{
         store:   NewMemoryStore(monitor.update),
         monitor: monitor,
+        client: &http.Client{},
     }
     c.index = NewLinkIndex(c.monitor.update, c.store)
     return c
@@ -47,13 +50,17 @@ func (c *context) Add(u string) {
 }
 
 func (c *context) normUrl(u string) string {
-    i := strings.Index(u, "?")
+    n := strings.Index(u, "?")
 
-    if i == -1 {
-        i = len(u)
+    if n == -1 {
+        n = len(u)
     }
 
-    return u[:i]
+    for u[n-1] == '/' && n >= 0 {
+        n--
+    }
+
+    return u[:n]
 }
 
 func (c *context) newRequest(id key, url string) *request {
@@ -63,33 +70,46 @@ func (c *context) newRequest(id key, url string) *request {
     r.store = c.store
     r.monitor = c.monitor
     r.index = c.index.index
+    r.client = c.client
     return r
 }
 
 func (r *request) fetch() {
     var data []byte
-    res, err := http.Get(r.url)
+    req, err := http.NewRequest("GET", r.url, nil)
 
     if err != nil {
-        goto Error
+        r.e(err)
+        return
     }
 
-    //debugResponse(res)
+    res, err := r.client.Do(req)
+
+    if err != nil {
+        r.e(err)
+        return
+    }
+
+    debugResponse(res)
     data, err = ioutil.ReadAll(res.Body)
 
     if err != nil {
-        goto Error
+        r.e(err)
+        return
     }
 
     defer res.Body.Close()
 
-    if r.store.Set(&Entry{r.id, data}) != nil {
-        goto Error
+    if r.store.Set(&Entry{r.id, req.URL, data}) != nil {
+        r.e(err)
+        return
     }
 
     r.index <- r.id
     return
-Error:
+}
+
+func (r *request) e(err error) {
     r.monitor.update <- update{r.id, StateError}
     fmt.Fprintln(os.Stderr, err)
 }
@@ -100,6 +120,6 @@ func NewKey(url string) key {
     return key(fmt.Sprintf("%x", h.Sum(nil)))
 }
 
-func (k key) String() string {
-    return string(k)
+func (k *key) String() string {
+    return string(*k)
 }

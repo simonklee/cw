@@ -5,6 +5,7 @@ import (
     "os"
     "path/filepath"
     "sync"
+    "net/url"
 )
 
 const (
@@ -12,12 +13,13 @@ const (
 )
 
 type Store interface {
-    Get(id key) ([]byte, error)
+    Get(id key) (*Entry, error)
     Set(e *Entry) error
 }
 
 type Entry struct {
     Id   key
+    URL  *url.URL
     Data []byte
 }
 
@@ -26,12 +28,12 @@ type MemoryStore struct {
 
     // entries lock
     mu      sync.RWMutex
-    entries map[key][]byte
+    entries map[key]*Entry
 }
 
 func NewMemoryStore(monitor chan update) *MemoryStore {
     s := &MemoryStore{
-        entries: make(map[key][]byte),
+        entries: make(map[key]*Entry),
         monitor: monitor,
     }
 
@@ -42,11 +44,11 @@ func (s *MemoryStore) Set(e *Entry) error {
     s.mu.Lock()
     defer s.mu.Unlock()
     s.monitor <- update{e.Id, StateStore}
-    s.entries[e.Id] = e.Data
+    s.entries[e.Id] = e
     return nil
 }
 
-func (s *MemoryStore) Get(id key) ([]byte, error) {
+func (s *MemoryStore) Get(id key) (*Entry, error) {
     s.mu.Lock()
     defer s.mu.Unlock()
 
@@ -79,6 +81,7 @@ func (s *FilesystemStore) Set(e *Entry) error {
 
     defer f.Close()
     n, err := f.Write(e.Data)
+    // TODO: serialize entry to file
 
     if err != nil || n != len(e.Data) {
         logger.Println("write:", err)

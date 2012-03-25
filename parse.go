@@ -1,45 +1,30 @@
 package main
 
 import (
-    "io"
-    "strings"
+    "bytes"
     "unicode"
 )
 
-type parse struct {
-    s   string
-    sep string
-    pos int
-    end int
-    n   int
-}
-
-func initParse(s string) *parse {
-    return &parse{
-        s:   s,
-        pos: 0,
-        end: len(s),
-    }
-}
-
-func (p *parse) next() (string, error) {
-    i := p.pos
-
+// Stateless link parser. Finds the next link in s, starting at s[i:].
+// Returns raw link and last index in s or an empty string and -1
+func linkParse(s []byte, i int) ([]byte, int) {
+    n := len(s)
+    sep := []byte("href")
 Loop:
 
-    for ; i+4 <= p.end; i++ {
+    for ; i+4 <= n; i++ {
         // find href
-        if p.s[i] == 'h' && p.s[i:i+4] == "href" {
+        if s[i] == 'h' && bytes.Equal(s[i:i+4], sep) {
             i += 4
 
             // find beginning of link
-            for ; i < p.end; i++ {
-                x := p.s[i]
-                if unicode.IsSpace(int32(x)) || x == '=' {
+            for ; i < n; i++ {
+                v := s[i]
+                if unicode.IsSpace(int32(v)) || v == '=' {
                     continue
                 }
 
-                if x == '"' {
+                if v == '"' {
                     i++
                     break
                 }
@@ -50,26 +35,26 @@ Loop:
             start := i
 
             // find the end of link
-            for ; i < p.end; i++ {
-                if p.s[i] == '"' {
+            for ; i < n; i++ {
+                if s[i] == '"' {
                     break
                 }
             }
 
-            p.pos = i
-            return strings.TrimSpace(p.s[start:p.pos]), nil
+            return bytes.TrimSpace(s[start:i]), i
         }
     }
 
-    return "", io.EOF
+    return nil, -1
 }
 
-func (p *parse) all() []string {
-    var buf []string
+func linkParseAll(data []byte) [][]byte {
+    var buf [][]byte
+    link, i := linkParse(data, 0)
 
-    for s, err := p.next(); err == nil; {
-        buf = append(buf, s)
-        s, err = p.next()
+    for i != -1 {
+        buf = append(buf, link)
+        link, i = linkParse(data, i)
     }
 
     return buf

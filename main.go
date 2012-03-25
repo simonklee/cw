@@ -33,6 +33,6 @@ func main() {
             c.Add(u)
         }
 
-        time.Sleep(1e9)
+        time.Sleep(1e9*2)
     }
 }
