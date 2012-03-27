@@ -123,8 +123,10 @@ func (r *request) fetch() {
     }
 
     //debugResponse(res)
-    if _, ok := res.Header["Content-Type"]; ok {
-       // TODO: ignore all except for text/html
+    ct := res.Header.Get("Content-Type")
+
+    if strings.Index(ct, "text/html") == -1 {
+        return
     }
 
     data, err = ioutil.ReadAll(res.Body)
