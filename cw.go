@@ -5,8 +5,15 @@ import (
     "fmt"
     "io/ioutil"
     "net/http"
+    "net/url"
     "os"
     "strings"
+    "time"
+)
+
+var (
+    MaxCrawlers   = 1
+    FetchInterval = time.Minute
 )
 
 type key string
@@ -30,22 +37,47 @@ type request struct {
 
 func newContext() *context {
     monitor := newMonitor()
+
     c := &context{
+        in:      make(chan string, 1024),
         store:   NewMemoryStore(monitor.update),
         monitor: monitor,
-        client: &http.Client{},
+        client:  &http.Client{},
     }
-    c.index = NewLinkIndex(c.monitor.update, c.store)
+
+    c.index = NewLinkIndex(c.monitor.update, c.store, c.in)
+
+    for i := 0; i < MaxCrawlers; i++ {
+        go c.listen()
+    }
+
     return c
 }
 
-func (c *context) Add(u string) {
+func (c *context) listen() {
+    for u := range c.in {
+        c.Add(u, false)
+    }
+}
+
+func (c *context) Add(u string, async bool) {
     u = c.normUrl(u)
     id := NewKey(u)
 
-    if c.monitor.SetIf(id, StateIdle, StateFetch) {
+    if c.monitor.SetIfTime(id, StateIdle, StateFetch, FetchInterval) {
         r := c.newRequest(id, u)
-        go r.fetch()
+
+        println()
+        println("====== ", u, " ======")
+
+        if async {
+            go r.fetch()
+        } else {
+            r.fetch()
+        }
+    } else {
+        //println("newly fetched", u)
+        //c.in <- u
     }
 }
 
@@ -69,7 +101,7 @@ func (c *context) newRequest(id key, url string) *request {
     r.id = id
     r.store = c.store
     r.monitor = c.monitor
-    r.index = c.index.index
+    r.index = c.index.in
     r.client = c.client
     return r
 }
@@ -90,7 +122,11 @@ func (r *request) fetch() {
         return
     }
 
-    debugResponse(res)
+    //debugResponse(res)
+    if _, ok := res.Header["Content-Type"]; ok {
+       // TODO: ignore all except for text/html
+    }
+
     data, err = ioutil.ReadAll(res.Body)
 
     if err != nil {
@@ -105,7 +141,9 @@ func (r *request) fetch() {
         return
     }
 
+    println("INDEXER", r.id)
     r.index <- r.id
+    println("FINISHED", r.id)
     return
 }
 
@@ -122,4 +160,8 @@ func NewKey(url string) key {
 
 func (k *key) String() string {
     return string(*k)
+}
+
+func (k *key) URL() *url.URL {
+    return nil
 }

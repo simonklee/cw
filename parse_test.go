@@ -1,9 +1,9 @@
 package main
 
 import (
-    "testing"
-    "os"
     "io/ioutil"
+    "os"
+    "testing"
 )
 
 func error_(t *testing.T, expected, got interface{}, err error) {
@@ -50,13 +50,13 @@ var multistring = `<!doctype html>
 
 func TestParserOnePass(t *testing.T) {
     for _, test := range parseTests {
-        b, i := linkParse([]byte(test.in), 0);
+        b, i := linkParse([]byte(test.in), 0)
 
         if string(b) != test.out {
             error_(t, test.out, b, nil)
         }
 
-        b, i = linkParse([]byte(test.in), i);
+        b, i = linkParse([]byte(test.in), i)
 
         if i != -1 {
             error_(t, b, i, nil)

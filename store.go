@@ -2,10 +2,10 @@ package main
 
 import (
     "errors"
+    "net/url"
     "os"
     "path/filepath"
     "sync"
-    "net/url"
 )
 
 const (
@@ -15,6 +15,7 @@ const (
 type Store interface {
     Get(id key) (*Entry, error)
     Set(e *Entry) error
+    Snapshot() map[key]*Entry
 }
 
 type Entry struct {
@@ -59,6 +60,19 @@ func (s *MemoryStore) Get(id key) (*Entry, error) {
     return nil, errors.New("not found")
 }
 
+func (s *MemoryStore) Snapshot() map[key]*Entry {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+
+    snap := make(map[key]*Entry, len(s.entries))
+
+    for k, v := range s.entries {
+       snap[k] = v 
+    }
+
+    return snap
+}
+
 type FilesystemStore struct {
     monitor chan update
 }
@@ -81,7 +95,6 @@ func (s *FilesystemStore) Set(e *Entry) error {
 
     defer f.Close()
     n, err := f.Write(e.Data)
-    // TODO: serialize entry to file
 
     if err != nil || n != len(e.Data) {
         logger.Println("write:", err)
@@ -97,5 +110,10 @@ func (s *FilesystemStore) path(id key) string {
 }
 
 func (s *FilesystemStore) Get(id key) ([]byte, error) {
+    // TODO: deserialize entry from file
     return nil, nil
+}
+
+func (s *FilesystemStore) Snapshot() map[key]*Entry {
+    return nil
 }

@@ -6,15 +6,17 @@ import (
 
 type LinkIndex struct {
     monitor chan update
-    index   chan key
+    in      chan key
+    out     chan string
     store   Store
 }
 
-func NewLinkIndex(monitor chan update, store Store) *LinkIndex {
+func NewLinkIndex(monitor chan update, store Store, out chan string) *LinkIndex {
     l := &LinkIndex{
         monitor: monitor,
-        index:   make(chan key),
+        in:      make(chan key),
         store:   store,
+        out:     out,
     }
 
     go l.listen()
@@ -22,24 +24,26 @@ func NewLinkIndex(monitor chan update, store Store) *LinkIndex {
 }
 
 func (l *LinkIndex) listen() {
-    for id := range l.index {
+    for id := range l.in {
         l.monitor <- update{id, StateIndex}
-        data, err := l.store.Get(id)
+        e, err := l.store.Get(id)
 
         if err != nil {
             l.monitor <- update{id, StateError}
         }
 
-        urlResolver(data)
+        println("PARSING:", e.URL.String())
+        urls := l.resolver(e)
+        l.sorter(urls)
     }
 }
 
-func urlResolver(e *Entry) (urls []*url.URL) {
-    raw, i := linkParse(e.Data, 0); 
+func (l *LinkIndex) resolver(e *Entry) (urls []*url.URL) {
+    raw, i := linkParse(e.Data, 0)
     //logger.Println(string(e.Data))
 
     for ; i > 0; raw, i = linkParse(e.Data, i) {
-        u, err := url.Parse(string(raw)); 
+        u, err := url.Parse(string(raw))
 
         if err == nil {
             u = e.URL.ResolveReference(u)
@@ -50,7 +54,13 @@ func urlResolver(e *Entry) (urls []*url.URL) {
     return
 }
 
-func absUrl(u *url.URL, domain string) (*url.URL) {
-    debugUrl(u)
-    return u 
+func (l *LinkIndex) sorter(urls []*url.URL) {
+    for _, u := range urls {
+        if u.Host == "simonklee.org" {
+            //println("GOT", u.String())
+            l.out <- u.String()
+        } else {
+            //println("IGNORE", u.String())
+        }
+    }
 }

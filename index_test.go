@@ -1,10 +1,10 @@
 package main
 
 import (
-    "testing"
+    "io/ioutil"
     "net/url"
     "os"
-    "io/ioutil"
+    "testing"
 )
 
 var data = []byte(`<!doctype html>

@@ -19,7 +19,7 @@ const (
 type state struct {
     id     key
     status flags
-    last   int64
+    last   time.Time
 }
 
 type update struct {
@@ -60,10 +60,9 @@ func (m *Monitor) set(id key, status flags) {
         m.states[id] = s
     }
 
-    s.last = time.Now().Unix()
+    s.last = time.Now()
     s.status = status
     m.states[s.id] = s
-    debugState(s.id, s.status)
 }
 
 func (m *Monitor) SetIf(id key, ifstatus, status flags) bool {
@@ -78,12 +77,12 @@ func (m *Monitor) SetIf(id key, ifstatus, status flags) bool {
     return false
 }
 
-func (m *Monitor) SetIfTime(id key, ifstatus, status flags, d int64) bool {
+func (m *Monitor) SetIfTime(id key, ifstatus, status flags, interval time.Duration) bool {
     m.mu.Lock()
     defer m.mu.Unlock()
     s, ok := m.states[id]
 
-    if !ok || (s.status == ifstatus && time.Now().Unix()-s.last > d) {
+    if !ok || (s.status == ifstatus && time.Since(s.last) > interval) {
         m.set(id, status)
         return true
     }

@@ -30,9 +30,19 @@ func main() {
         c := newContext()
 
         for _, u := range args {
-            c.Add(u)
+            c.Add(u, true)
         }
 
-        time.Sleep(1e9*2)
+        time.Sleep(1e9 * 5)
+        for _, e := range c.store.Snapshot() {
+            head := "=======" + e.URL.String() + "==========="
+            println(head)
+            println(string(e.Data))
+
+            for i:= 0; i < len(head); i++ {
+                print("=")
+            }
+            println()
+        }
     }
 }
