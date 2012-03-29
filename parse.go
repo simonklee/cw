@@ -7,41 +7,42 @@ import (
 
 // Stateless link parser. Finds the next link in s, starting at s[i:].
 // Returns raw link and last index in s or an empty string and -1
-func linkParse(s []byte, i int) ([]byte, int) {
+func linkParse(s []byte, off int) ([]byte, int) {
     n := len(s)
     sep := []byte("href")
+    seplen := len(sep)
 Loop:
 
-    for ; i+4 <= n; i++ {
+    for ; off+seplen <= n; off++ {
         // find href
-        if s[i] == 'h' && bytes.Equal(s[i:i+4], sep) {
-            i += 4
+        if s[off] == sep[0] && bytes.Equal(s[off:off+seplen], sep) {
+            off += seplen
 
             // find beginning of link
-            for ; i < n; i++ {
-                v := s[i]
+            for ; off < n; off++ {
+                v := s[off]
                 if unicode.IsSpace(int32(v)) || v == '=' {
                     continue
                 }
 
                 if v == '"' {
-                    i++
+                    off++
                     break
                 }
 
                 goto Loop
             }
 
-            start := i
+            start := off
 
             // find the end of link
-            for ; i < n; i++ {
-                if s[i] == '"' {
+            for ; off < n; off++ {
+                if s[off] == '"' {
                     break
                 }
             }
 
-            return bytes.TrimSpace(s[start:i]), i
+            return bytes.TrimSpace(s[start:off]), off
         }
     }
 
