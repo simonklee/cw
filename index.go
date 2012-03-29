@@ -2,6 +2,7 @@ package main
 
 import (
     "net/url"
+    "regexp"
 )
 
 type LinkIndex struct {
@@ -32,9 +33,9 @@ func (l *LinkIndex) listen() {
             l.monitor <- update{id, StateError}
         }
 
-        println("PARSING:", e.URL.String())
+        //println("PARSING:", e.URL.String())
         urls := l.resolver(e)
-        l.sorter(urls)
+        l.localSorter(urls)
     }
 }
 
@@ -54,13 +55,34 @@ func (l *LinkIndex) resolver(e *Entry) (urls []*url.URL) {
     return
 }
 
-func (l *LinkIndex) sorter(urls []*url.URL) {
+var (
+    // https://github.com/{user}/{project}/blob/{branch}/{filename}
+    //
+    // https://github.com/(simonz05/godis)/blob/(stable/conn.go)
+    //    =
+    // https://github.com/(simonz05/godis)/raw/(stable/conn.go)
+    //    =
+    // https://raw.github.com/(simonz05/godis)/(stable/conn.go)
+    githubResRegex = regexp.MustCompile("^/(.*/.*)/blob/(.*)$")
+    githubResRepl = "/$1/$2"
+
+    //https://github.com/{user}/{project}/blob/{branch}/{filename}
+    localResRegex = regexp.MustCompile("^/blob/(.*)")
+    localResRepl = "/raw/$1"
+)
+
+func (l *LinkIndex) localSorter(urls []*url.URL) {
     for _, u := range urls {
-        if u.Host == "simonklee.org" {
-            //println("GOT", u.String())
+        switch {
+        case u.Host != "localhost":
+            // ignore
+        case localResRegex.MatchString(u.Path):
+            u.Path = localResRegex.ReplaceAllString(u.Path, localResRepl)
+            // TODO save in redis resource queue
+        default:
+            // TODO save to redis link queue
+            // <- is a deadlock because links found will always be greater than links consumed(crawled)
             l.out <- u.String()
-        } else {
-            //println("IGNORE", u.String())
-        }
+        } 
     }
 }

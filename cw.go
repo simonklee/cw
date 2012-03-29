@@ -8,6 +8,7 @@ import (
     "net/url"
     "os"
     "strings"
+    "errors"
     "time"
 )
 
@@ -39,7 +40,7 @@ func newContext() *context {
     monitor := newMonitor()
 
     c := &context{
-        in:      make(chan string, 1024),
+        in:      make(chan string, 1024*1024),
         store:   NewMemoryStore(monitor.update),
         monitor: monitor,
         client:  &http.Client{},
@@ -123,9 +124,18 @@ func (r *request) fetch() {
     }
 
     //debugResponse(res)
+    switch res.StatusCode {
+        case 200:
+            // ok
+        default:
+            r.e(errors.New(r.url + ": " + res.Status))
+            return
+    }
+
     ct := res.Header.Get("Content-Type")
 
     if strings.Index(ct, "text/html") == -1 {
+        println("Content-Type not supported", ct)
         return
     }
 
@@ -143,9 +153,9 @@ func (r *request) fetch() {
         return
     }
 
-    println("INDEXER", r.id)
+    //println("INDEXER", r.id)
     r.index <- r.id
-    println("FINISHED", r.id)
+    //println("FINISHED", r.id)
     return
 }
 
